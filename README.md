@@ -2,15 +2,15 @@
 
 A wallet API built with Node.js, TypeScript, Express and PostgreSQL. Supports account creation, wallet transfers, blacklist screening and account blocking.
 
-**[Live API](https://lendsqr-wallet-service-t524.onrender.com)** · **[Health check](https://lendsqr-wallet-service-t524.onrender.com/ready)**
+**[Live API](https://tolu-lendsqr-be-test.onrender.com)** · **[Health check](https://tolu-lendsqr-be-test.onrender.com/ready)**
 
 ## Getting started
 
 Requires Node.js 22 and PostgreSQL 17. Docker Compose is included for running PostgreSQL locally.
 
 ```bash
-git clone https://github.com/kingtolu001/lendsqr-wallet-service.git
-cd lendsqr-wallet-service
+git clone https://github.com/kingtolu001/lendsqr-be-test.git
+cd lendsqr-be-test
 
 npm ci
 docker compose up -d
@@ -132,6 +132,56 @@ Blacklist entries prevent registration and money movement. Blacklist membership 
 
 **Security.** User keys are randomly generated and hashed before storage. Requests use parameterized SQL, strict validation, rate limiting, security headers and bounded database timeouts.
 
+## Database design
+
+```mermaid
+erDiagram
+  USERS ||--|| WALLETS : owns
+  USERS ||--o{ ACCOUNT_EVENTS : has
+  WALLETS ||--o{ TRANSACTIONS : sends
+  WALLETS ||--o{ TRANSACTIONS : receives
+  TRANSACTIONS ||--|{ LEDGER_ENTRIES : records
+
+  USERS {
+    uuid id PK
+    text email UK
+    text name
+    text api_key_hash UK
+    boolean blocked
+  }
+  WALLETS {
+    uuid id PK
+    uuid user_id FK
+    text currency
+    bigint balance_minor
+  }
+  TRANSACTIONS {
+    uuid id PK
+    text actor
+    text idempotency_key
+    text kind
+    bigint amount_minor
+  }
+  LEDGER_ENTRIES {
+    bigint id PK
+    uuid transaction_id FK
+    uuid wallet_id FK
+    bigint delta_minor
+  }
+  ACCOUNT_EVENTS {
+    bigint id PK
+    uuid user_id FK
+    boolean blocked
+    text reason
+  }
+  BLACKLIST {
+    text email PK
+    text reason
+  }
+```
+
+Each user owns one wallet. Transactions reference their source and destination wallets; ledger entries record the corresponding balance movements. The blacklist is keyed by normalized email and is independent of registered users.
+
 ## Testing
 
 Create a dedicated test database:
@@ -154,7 +204,7 @@ Hosted checks also verified concurrent transfers, replay protection, blacklist r
 
 ## Deployment
 
-The service is hosted on Render. `render.yaml` defines the web service and PostgreSQL database.
+The service is hosted on Render at `https://tolu-lendsqr-be-test.onrender.com`. `render.yaml` defines the web service and PostgreSQL database.
 
 **Build command**
 
