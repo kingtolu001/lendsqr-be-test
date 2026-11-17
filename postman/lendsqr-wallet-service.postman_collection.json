@@ -1,0 +1,160 @@
+{
+  "info": {
+    "_postman_id": "6b8982b7-4b6c-4c78-96a9-4e0d72f8af50",
+    "name": "Lendsqr Wallet API",
+    "description": "Requests for the Lendsqr wallet assessment API. Account creation, funding, transfers, blocking, and blacklist requests modify the live database. Use disposable test data and small amounts. Set API keys in the imported environment; never add them to this collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Service",
+      "item": [
+        {
+          "name": "API overview",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/" }
+        },
+        {
+          "name": "Health",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "Readiness (database)",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/ready" }
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create account and wallet",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"wallet-demo-{{$timestamp}}@example.com\",\n  \"name\": \"Wallet Demo User\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/accounts",
+            "description": "Creates a user and NGN wallet. The response contains a one-time user API key. Copy it into the secret userApiKey variable in the local Postman environment; it cannot be retrieved later."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.environment.set('accountId', body.user.id);",
+                  "  pm.environment.set('walletId', body.wallet.id);",
+                  "  console.info('Saved accountId and walletId to the active Postman environment. Copy body.api_key manually into the secret userApiKey variable.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current account and balance",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{userApiKey}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/me"
+          }
+        },
+        {
+          "name": "List transactions",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{userApiKey}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/v1/transactions?limit=20&offset=0", "host": ["{{baseUrl}}"], "path": ["v1", "transactions"], "query": [{ "key": "limit", "value": "20" }, { "key": "offset", "value": "0" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transfers",
+      "item": [
+        {
+          "name": "Fund wallet (admin test balance)",
+          "request": {
+            "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Admin-Key", "type": "string" }, { "key": "value", "value": "{{adminApiKey}}", "type": "string" }, { "key": "in", "value": "header", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{fundingIdempotencyKey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"wallet_id\": \"{{walletId}}\",\n  \"amount_minor\": \"10000\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/admin/funding",
+            "description": "Adds test funds. 10000 minor units equals NGN 100.00. Repeating the same request with the same idempotency key replays the original transaction."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": ["if (!pm.environment.get('fundingIdempotencyKey')) pm.environment.set('fundingIdempotencyKey', 'funding-' + pm.variables.replaceIn('{{$guid}}')); "] }
+            }
+          ]
+        },
+        {
+          "name": "Transfer funds",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{userApiKey}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "{{transferIdempotencyKey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"destination_wallet_id\": \"{{destinationWalletId}}\",\n  \"amount_minor\": \"2500\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/transfers",
+            "description": "Transfers NGN 25.00 from the authenticated user's wallet. Set destinationWalletId first. To replay this request, leave transferIdempotencyKey unchanged. Clear the variable before trying a different payload."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": ["if (!pm.environment.get('transferIdempotencyKey')) pm.environment.set('transferIdempotencyKey', 'transfer-' + pm.variables.replaceIn('{{$guid}}')); "] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Account controls and blacklist (admin)",
+      "item": [
+        {
+          "name": "Block or unblock account",
+          "request": {
+            "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Admin-Key", "type": "string" }, { "key": "value", "value": "{{adminApiKey}}", "type": "string" }, { "key": "in", "value": "header", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"blocked\": true,\n  \"reason\": \"Assessment test\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/admin/accounts/{{accountId}}",
+            "description": "Set blocked to false to unblock the account."
+          }
+        },
+        {
+          "name": "Add or update blacklist entry",
+          "request": {
+            "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Admin-Key", "type": "string" }, { "key": "value", "value": "{{adminApiKey}}", "type": "string" }, { "key": "in", "value": "header", "type": "string" }] },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"blacklist-demo@example.com\",\n  \"reason\": \"Assessment test\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/admin/blacklist"
+          }
+        },
+        {
+          "name": "Check blacklist entry",
+          "request": {
+            "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Admin-Key", "type": "string" }, { "key": "value", "value": "{{adminApiKey}}", "type": "string" }, { "key": "in", "value": "header", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/v1/admin/blacklist?email=blacklist-demo%40example.com", "host": ["{{baseUrl}}"], "path": ["v1", "admin", "blacklist"], "query": [{ "key": "email", "value": "blacklist-demo@example.com" }] }
+          }
+        },
+        {
+          "name": "Remove blacklist entry",
+          "request": {
+            "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Admin-Key", "type": "string" }, { "key": "value", "value": "{{adminApiKey}}", "type": "string" }, { "key": "in", "value": "header", "type": "string" }] },
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"blacklist-demo@example.com\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/admin/blacklist"
+          }
+        }
+      ]
+    }
+  ]
+}
