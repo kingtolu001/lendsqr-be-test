@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: lendsqr-wallet-api
+    name: tolu-lendsqr-be-test
     runtime: node
     plan: free
     buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
